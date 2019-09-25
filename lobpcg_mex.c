@@ -1,17 +1,12 @@
+/* Copyright © 2019 Ben Hermans */
+ 
 #include "mex.h"
 #include <stdlib.h>
 #include <math.h>
-// #include <lapacke.h>
 #include "lapack.h"
 
-// #if !defined(_WIN32)
-// #define dsyev dsyev_
-// #define dsygv dsygv_
-// #endif
-
 #define TOL 1e-5
-#  define c_absval(x) (((x) < 0) ? -(x) : (x)) /**< absolute value */
-// #define MIN(a,b,c) (a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c))
+#  define c_absval(x) (((x) < 0) ? -(x) : (x)) /* absolute value */
 
 double vec_prod(const double *a, const double *b, size_t n) {
   double prod = 0.0;
