@@ -134,6 +134,171 @@ void lobcpg_cleanup(double *x, double *Ax, double *w, double *Aw, double *p, dou
     mxFree(Ap);
 }
 
+#define c_min(a, b) (((a) < (b)) ? (a) : (b)) /**< minimum of two values */
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
+
+double min_root_third_order(double a, double b, double c, double d)
+{
+    double r[3] = {0};
+    double di, di_sqrt;
+    if (a == 0)
+    {
+        // Not a cubic polynomial, should not happen 
+        // mexPrintf("Error: Not a cubic polynomial. This should not happen\n");
+    }
+    else if (d == 0)
+    {
+        di = b*b - 4*a*c;
+        if (d < 0)
+        {
+            mexPrintf("Error: Imaginary roots. This should not happen\n");
+        }
+        di_sqrt = sqrt(di);
+        r[0] = (-b-di_sqrt)/(2*a);
+        // r[1] = (-b+d_sqrt)/(2*a); //Not relevant since we want the min root
+    }
+    else
+    {
+        double temp, q, p, re, an, r13;
+        temp = 1/a;
+        b = b*temp;
+        c = c*temp;
+        d = d*temp;
+        q = (3.0*c - (b*b))/9.0;
+        p = (-(27.0*d) + b*(9.0*c - 2.0*(b*b)))/54.0;
+        di = q*q*q + p*p;
+        re = b/3.0;
+        if (di > 0)
+            mexPrintf('Imaginary roots, should not happen\n'); 
+        else 
+        {
+            q = -q;
+            an = q*q*q;
+            an = acos(p/sqrt(an));
+            r13 = 2.0*sqrt(q);
+            r[0] = -re + r13*cos(an/3.0);
+            r[1] = -re + r13*cos((an + 2.0*M_PI)/3.0);
+            r[2] = -re + r13*cos((an + 4.0*M_PI)/3.0);
+        }
+    }
+    
+    if (r[0] <= r[1] && r[0] <= r[2]) return r[0];
+    else return c_min(r[1], r[2]);
+}
+
+#include <math.h>
+#  define c_sqrt sqrt /**< square root */
+
+#define RREF_TOL 1e-8
+# ifndef c_absval
+#  define c_absval(x) (((x) < 0) ? -(x) : (x)) /**< absolute value */
+# endif /* ifndef c_absval */
+
+# ifndef c_max
+#  define c_max(a, b) (((a) > (b)) ? (a) : (b)) /**< maximum of two values */
+# endif /* ifndef c_max */
+
+int custom_rref(double D[3][3])
+{
+    double p, k, temp[3];
+
+    // First column
+    if (c_absval(D[0][0]) < RREF_TOL) 
+    {
+        if (c_absval(D[1][0]) > RREF_TOL)
+        {
+            // swap row 0 and 1
+            temp[0] = D[0][0]; temp[1] = D[0][1]; temp[2] = D[0][2];
+            D[0][0] = D[1][0]; D[0][1] = D[1][1]; D[0][2] = D[1][2];
+            D[1][0] = temp[0]; D[1][1] = temp[1]; D[1][2] = temp[2];  
+        }
+        else if (c_absval(D[2][0]) > RREF_TOL)
+        {
+            // swap row 0 and 2
+            temp[0] = D[0][0]; temp[1] = D[0][1]; temp[2] = D[0][2];
+            D[0][0] = D[2][0]; D[0][1] = D[2][1]; D[0][2] = D[2][2];
+            D[2][0] = temp[0]; D[2][1] = temp[1]; D[2][2] = temp[2];  
+        }
+        else
+        {
+            return 0;
+        }
+    }
+    p = 1.0/D[0][0];
+    D[0][1] *= p; D[0][2] *= p; D[0][0] = 1.0;
+    D[1][1] -= D[1][0]*D[0][1]; D[1][2] -= D[1][0]*D[0][2]; D[1][0] = 0;
+    D[2][1] -= D[2][0]*D[0][1]; D[2][2] -= D[2][0]*D[0][2]; D[2][0] = 0;
+
+    // Second column
+    if (c_absval(D[1][1]) < RREF_TOL) 
+    {
+        if (c_absval(D[2][1]) < RREF_TOL)
+        {
+            return 1;
+        }
+        else
+        {
+            temp[2] = D[1][2];
+            D[1][1] = D[2][1]; D[1][2] = D[2][2];
+            D[2][2] = temp[2]; D[2][1] = 0;
+        }
+    }
+
+    p = 1/D[1][1];
+    D[1][2] *= p; D[1][1] = 1;
+    D[0][2] -= D[0][1]*D[1][2]; D[0][1] = 0;
+    D[2][2] -= D[2][1]*D[1][2]; D[2][1] = 0;
+
+    // if (c_absval(D[2][2]) < RREF_TOL) D[2][2] = 0;
+    return 2;
+}
+
+double custom_eig(const double B[3][3], const double C[3][3], double x[3])
+{
+    double a, b, c, d;
+    // TODO: this unpacking is silly
+    double xqx = B[0][0], xqw = B[0][1], xqp = B[0][2], wqw = B[1][1], wqp = B[1][2], pqp = B[2][2], xp = C[0][2], wp = C[1][2];
+    a = wp*wp + xp*xp - 1;
+    b = (-xqx*wp*wp + 2*xqw*wp*xp - 2*wqp*wp - wqw*xp*xp - 2*xqp*xp + pqp + wqw + xqx);
+    c = (wqp*wqp - 2*xp*wqp*xqw + 2*wp*xqx*wqp + xqp*xqp - 2*wp*xqp*xqw + 2*wqw*xp*xqp + xqw*xqw - pqp*wqw - pqp*xqx - wqw*xqx);
+    d = - xqx*wqp*wqp + 2*wqp*xqp*xqw - wqw*xqp*xqp - pqp*xqw*xqw + pqp*wqw*xqx;
+    double lam = min_root_third_order(a, b, c, d);
+    double D[3][3];
+    D[0][0] = B[0][0] - lam*C[0][0];
+    D[0][1] = B[0][1];
+    D[0][2] = B[0][2] - lam*C[0][2];
+    D[1][0] = B[1][0];
+    D[1][1] = B[1][1] - lam*C[1][1];
+    D[1][2] = B[1][2] - lam*C[1][2];
+    D[2][0] = B[2][0] - lam*C[2][0];
+    D[2][1] = B[2][1] - lam*C[2][1];
+    D[2][2] = B[2][2] - lam*C[2][2];
+    int ind = custom_rref(D);
+
+    if (ind == 0)
+    {
+        x[0] = 1; x[1] = 0; x[2] = 0;
+    }
+    else 
+    if (ind == 1)
+    {
+        x[0] = 0; x[1] = 1; x[2] = 0;
+    }
+    else
+    {
+        double temp = 1/c_sqrt(1 + D[0][2]*D[0][2] - 2*D[0][2]*C[0][2] + D[1][2]*D[1][2] - 2*D[1][2]*C[1][2]);
+
+        x[0] = -D[0][2]*temp;
+        x[1] = -D[1][2]*temp;
+        x[2] = temp;
+    }
+    return lam;
+    
+}
+
+
 void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs []) {
 
     if (nrhs != 1) {
@@ -170,13 +335,14 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     double B[3][3]; /*Compressed A on the [x, w, p] basis */
     double C[3][3] = {1, 0, 0, 0, 1, 0, 0, 0, 1}; /* Takes into account that p is not orthonormal with x, w */
     double lambda_B[3]; /* The eigenvalues of B */
-    double *y; /* Eigenvector corresponding to min(lambda_B) */
+    
     double xAw, wAw, xAp, wAp, pAp, xp, wp;
 
     /* Initialize eigenvector randomly */
     size_t i;
     for (i = 0; i < n; i++) {
-        x[i] = (double) rand()/RAND_MAX;
+        // x[i] = (double) rand()/RAND_MAX;
+        x[i] = 1.0;
     }
     vec_self_mult_scalar(x, 1.0/norm(x, n), n);
     mat_vec(Aval, Acol, Arow, n, x, Ax);
@@ -194,6 +360,8 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     double B_init[2][2] = {lambda_min, xAw, xAw, wAw};
     double lambda_init[2];
 
+    #ifdef DLAPACK
+    double *y; /* Eigenvector corresponding to min(lambda_B) */
     /* Lapack variables */
     long int info = 0, dim = 2, lwork = 10, itype = 1;
     double work[10];
@@ -204,6 +372,32 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     dsyev(&jobz, &uplo, &dim, *B_init, &dim, lambda_init, work, &lwork, &info);
     lambda_min = lambda_init[0];
     y = B_init[0];
+    #else
+    double y[3];
+    double b, c, di;
+    b = -(lambda_min + wAw);
+    c = lambda_min*wAw - xAw*xAw;
+    di = b*b - 4*c;
+    lambda_min = (-b-c_sqrt(di))/2;
+    B_init[0][0] -= lambda_min;
+    B_init[1][1] -= lambda_min;
+    if (c_absval(B_init[0][0]) < RREF_TOL)
+    {
+        y[0] = 1; y[1] = 0;
+    }
+    else
+    {
+        B_init[0][1] /= B_init[0][0];
+        b = 1/c_sqrt(1 + B_init[0][1]*B_init[0][1]);
+        y[0] = -B_init[0][1]*b;
+        y[1] = b;
+    }
+    
+    
+    #endif
+    // mexPrintf("Lam_min = %e\n", lambda_min);
+    // mexPrintf("y1 = %e\n", y[0]);
+    // mexPrintf("y2 = %e\n", y[1]);
 
     /* Compute first p */
     vec_mult_scalar(w, y[1], p, n);
@@ -211,15 +405,18 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     vec_add_scaled(p, x, x, y[0], n);
     vec_add_scaled(Ap, Ax, Ax, y[0], n);
     
+    #ifdef DLAPACK
     dim = 3; /* From now on, the dimension of the eigenproblem to solve will be 3 */
+    #endif
     size_t max_iter = 1000;
     for (i = 0; i < max_iter; i++) {
 
         /* Update w */
         vec_add_scaled(Ax, x, w, -lambda_min, n);
         if (vec_norm_inf(w, n) < TOL) {
-            *lambda_min_result = lambda_min;
+            *lambda_min_result = lambda_min - c_sqrt(2.0)*norm(w, n);
             lobcpg_cleanup(x, Ax, w, Aw, p, Ap);
+            // mexPrintf("Iter = %d\n", i);
             return;
         } 
         vec_add_scaled(w, x, w, -vec_prod(x, w, n), n);
@@ -247,11 +444,36 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
         C[0][2] = xp; C[1][2] = wp; C[2][0] = xp; C[2][1] = wp; 
         C[2][2] = 1.0; /* The dsygv routine might override this element, therefore we reset it here.*/
 
+        if (i == 0)
+        {
+            // mexPrintf("B = ...\n");
+            // mexPrintf("[%e, %e, %e;\n", B[0][0], B[0][1], B[0][2]);
+            // mexPrintf(" %e, %e, %e;\n", B[1][0], B[1][1], B[1][2]);
+            // mexPrintf(" %e, %e, %e]\n", B[2][0], B[2][1], B[2][2]);
+            
+            // mexPrintf("C = ...\n");
+            // mexPrintf("[%e, %e, %e;\n", C[0][0], C[0][1], C[0][2]);
+            // mexPrintf(" %e, %e, %e;\n", C[1][0], C[1][1], C[1][2]);
+            // mexPrintf(" %e, %e, %e]\n", C[2][0], C[2][1], C[2][2]);
+        }
+
+        #ifdef DLAPACK
         /* Solve eigenproblem B*x = lambda*C*x */
         dsygv(&itype, &jobz, &uplo, &dim, *B, &dim, *C, &dim, lambda_B, work, &lwork, &info);
         lambda_min = lambda_B[0];
         y = B[0];
-
+        #else 
+        lambda_min = custom_eig(B, C, y);
+        #endif
+        
+        if (i == 0)
+        {
+            // mexPrintf("Lam_min = %e\n", lambda_min);
+            // mexPrintf("y1 = %e\n", y[0]);
+            // mexPrintf("y2 = %e\n", y[1]);
+            // mexPrintf("y3 = %e\n", y[2]);
+        }
+        
         /* Update p and x */
         vec_mult_add_scaled(p, w, y[2], y[1], n);
         vec_mult_add_scaled(Ap, Aw, y[2], y[1], n);
