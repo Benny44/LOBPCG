@@ -202,56 +202,58 @@ double min_root_third_order(double a, double b, double c, double d)
 
 int custom_rref(double D[3][3])
 {
-    double p, k, temp[3];
+    double p, k, temp[3], a[3];
 
     // First column
-    if (c_absval(D[0][0]) < RREF_TOL) 
+    a[0] = c_absval(D[0][0]); a[1] = c_absval(D[0][1]); a[2] = c_absval(D[0][2]); 
+    if (a[0] < a[1] || a[0] < a[2])
     {
-        if (c_absval(D[1][0]) > RREF_TOL)
+        if (a[1] > a[2])
         {
+            if (a[1] < RREF_TOL) return 0;
             // swap row 0 and 1
             temp[0] = D[0][0]; temp[1] = D[0][1]; temp[2] = D[0][2];
             D[0][0] = D[1][0]; D[0][1] = D[1][1]; D[0][2] = D[1][2];
             D[1][0] = temp[0]; D[1][1] = temp[1]; D[1][2] = temp[2];  
         }
-        else if (c_absval(D[2][0]) > RREF_TOL)
+        else
         {
+            if (a[2] < RREF_TOL) return 0;
             // swap row 0 and 2
             temp[0] = D[0][0]; temp[1] = D[0][1]; temp[2] = D[0][2];
             D[0][0] = D[2][0]; D[0][1] = D[2][1]; D[0][2] = D[2][2];
             D[2][0] = temp[0]; D[2][1] = temp[1]; D[2][2] = temp[2];  
         }
-        else
-        {
-            return 0;
-        }
     }
+    else
+    {
+        if (a[0] < RREF_TOL) return 0;
+    }
+    
     p = 1.0/D[0][0];
     D[0][1] *= p; D[0][2] *= p; D[0][0] = 1.0;
     D[1][1] -= D[1][0]*D[0][1]; D[1][2] -= D[1][0]*D[0][2]; D[1][0] = 0;
     D[2][1] -= D[2][0]*D[0][1]; D[2][2] -= D[2][0]*D[0][2]; D[2][0] = 0;
 
     // Second column
-    if (c_absval(D[1][1]) < RREF_TOL) 
+    a[1] = c_absval(D[1][1]); a[2] = c_absval(D[2][1]);
+    if (a[1] < a[2])
     {
-        if (c_absval(D[2][1]) < RREF_TOL)
-        {
-            return 1;
-        }
-        else
-        {
-            temp[2] = D[1][2];
-            D[1][1] = D[2][1]; D[1][2] = D[2][2];
-            D[2][2] = temp[2]; D[2][1] = 0;
-        }
+        if (a[2] < RREF_TOL) return 1;
+        temp[2] = D[1][2];
+        D[1][1] = D[2][1]; D[1][2] = D[2][2];
+        D[2][2] = temp[2]; D[2][1] = 0;
+    }
+    else
+    {
+        if (a[1] < RREF_TOL) return 1;
     }
 
-    p = 1/D[1][1];
-    D[1][2] *= p; D[1][1] = 1;
+    p = 1.0/D[1][1];
+    D[1][2] *= p; D[1][1] = 1.0;
     D[0][2] -= D[0][1]*D[1][2]; D[0][1] = 0;
     D[2][2] -= D[2][1]*D[1][2]; D[2][1] = 0;
 
-    // if (c_absval(D[2][2]) < RREF_TOL) D[2][2] = 0;
     return 2;
 }
 
@@ -294,6 +296,7 @@ double custom_eig(const double B[3][3], const double C[3][3], double x[3])
         x[1] = -D[1][2]*temp;
         x[2] = temp;
     }
+
     return lam;
     
 }
