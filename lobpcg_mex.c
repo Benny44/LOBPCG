@@ -91,6 +91,14 @@ void vec_add_scaled(const double *a, const double *b, double *c, double sc, size
   }
 }
 
+void prea_vec_copy(const double *a, double *b, size_t n) {
+  size_t i;
+
+  for (i = 0; i < n; i++) {
+    b[i] = a[i];
+  }
+}
+
 void vec_double_add_scaled(const double *a, const double *b1, const double *b2, double *c, double sc1, double sc2, size_t n) {
   size_t i;
 
@@ -171,7 +179,7 @@ double min_root_third_order(double a, double b, double c, double d)
         di = q*q*q + p*p;
         re = b/3.0;
         if (di > 0)
-            mexPrintf('Imaginary roots, should not happen\n'); 
+            mexPrintf("Imaginary roots, should not happen\n"); 
         else 
         {
             q = -q;
@@ -199,6 +207,10 @@ double min_root_third_order(double a, double b, double c, double d)
 # ifndef c_max
 #  define c_max(a, b) (((a) > (b)) ? (a) : (b)) /**< maximum of two values */
 # endif /* ifndef c_max */
+
+# ifndef mod
+#  define mod(a,b) ((((a)%(b))+(b))%(b)) /**< modulo operation (positive result for all values) */
+#endif
 
 int custom_rref(double D[3][3])
 {
@@ -341,11 +353,38 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     
     double xAw, wAw, xAp, wAp, pAp, xp, wp;
 
+    double *iter; 
+    if (nlhs > 1)
+    {
+        /* Output pointer */
+        plhs[1] = mxCreateDoubleMatrix(1, 1, mxREAL);
+        iter = mxGetPr(plhs[1]);
+    }
+
+    double *eig_vec;
+    if (nlhs > 2)
+    {
+        /* Output pointer */
+        plhs[2] = mxCreateDoubleMatrix(n, 1, mxREAL);
+        eig_vec = mxGetPr(plhs[2]);
+    }
+
+    double *lam_vec;
+    if (nlhs > 3)
+    {
+        /* Output pointer */
+        plhs[3] = mxCreateDoubleMatrix(10001, 1, mxREAL);
+        lam_vec = mxGetPr(plhs[3]);
+    }
+
+    
+
     /* Initialize eigenvector randomly */
+    // srand(2);
     size_t i;
     for (i = 0; i < n; i++) {
-        // x[i] = (double) rand()/RAND_MAX;
-        x[i] = 1.0;
+        x[i] = (double) rand()/RAND_MAX;
+        // x[i] = 1.0/(i+1);
     }
     vec_self_mult_scalar(x, 1.0/norm(x, n), n);
     mat_vec(Aval, Acol, Arow, n, x, Ax);
@@ -398,9 +437,12 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     
     
     #endif
-    // mexPrintf("Lam_min = %e\n", lambda_min);
-    // mexPrintf("y1 = %e\n", y[0]);
-    // mexPrintf("y2 = %e\n", y[1]);
+    // mexPrintf("Iter: %d, Lam = %e, y = [%e, %e]\n", 0, lambda_min, y[0], y[1]);
+
+    if (nlhs > 3)
+    {
+        lam_vec[0] = lambda_min;
+    }
 
     /* Compute first p */
     vec_mult_scalar(w, y[1], p, n);
@@ -411,14 +453,23 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     #ifdef DLAPACK
     dim = 3; /* From now on, the dimension of the eigenproblem to solve will be 3 */
     #endif
-    size_t max_iter = 1000;
+    size_t max_iter = 10000;
     for (i = 0; i < max_iter; i++) {
 
         /* Update w */
         vec_add_scaled(Ax, x, w, -lambda_min, n);
         if (vec_norm_inf(w, n) < TOL) {
             *lambda_min_result = lambda_min - c_sqrt(2.0)*norm(w, n);
+            if (nlhs > 1)
+            {
+                *iter = (double) ++i;
+            }
+            if (nlhs > 2)
+            {
+                prea_vec_copy(x, eig_vec, n);
+            }
             lobcpg_cleanup(x, Ax, w, Aw, p, Ap);
+
             // mexPrintf("Iter = %d\n", i);
             return;
         } 
@@ -447,19 +498,6 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
         C[0][2] = xp; C[1][2] = wp; C[2][0] = xp; C[2][1] = wp; 
         C[2][2] = 1.0; /* The dsygv routine might override this element, therefore we reset it here.*/
 
-        if (i == 0)
-        {
-            // mexPrintf("B = ...\n");
-            // mexPrintf("[%e, %e, %e;\n", B[0][0], B[0][1], B[0][2]);
-            // mexPrintf(" %e, %e, %e;\n", B[1][0], B[1][1], B[1][2]);
-            // mexPrintf(" %e, %e, %e]\n", B[2][0], B[2][1], B[2][2]);
-            
-            // mexPrintf("C = ...\n");
-            // mexPrintf("[%e, %e, %e;\n", C[0][0], C[0][1], C[0][2]);
-            // mexPrintf(" %e, %e, %e;\n", C[1][0], C[1][1], C[1][2]);
-            // mexPrintf(" %e, %e, %e]\n", C[2][0], C[2][1], C[2][2]);
-        }
-
         #ifdef DLAPACK
         /* Solve eigenproblem B*x = lambda*C*x */
         dsygv(&itype, &jobz, &uplo, &dim, *B, &dim, *C, &dim, lambda_B, work, &lwork, &info);
@@ -467,14 +505,12 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
         y = B[0];
         #else 
         lambda_min = custom_eig(B, C, y);
+        
         #endif
         
-        if (i == 0)
+        if (nlhs > 3)
         {
-            // mexPrintf("Lam_min = %e\n", lambda_min);
-            // mexPrintf("y1 = %e\n", y[0]);
-            // mexPrintf("y2 = %e\n", y[1]);
-            // mexPrintf("y3 = %e\n", y[2]);
+            lam_vec[i+1] = lambda_min;
         }
         
         /* Update p and x */
@@ -486,6 +522,10 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
     }
 
     *lambda_min_result = lambda_min;
+    if (nlhs > 1)
+    {
+        *iter = (double) max_iter;
+    }
     mexPrintf("Not converged!\n");
     lobcpg_cleanup(x, Ax, w, Aw, p, Ap);
     return;
