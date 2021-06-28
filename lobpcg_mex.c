@@ -519,6 +519,16 @@ void mexFunction(int nlhs, mxArray * plhs [], int nrhs, const mxArray * prhs [])
         vec_mult_add_scaled(x, p, y[0], 1, n);
         vec_mult_add_scaled(Ax, Ap, y[0], 1, n);
 
+        #ifndef DLAPACK
+        if (mod(i, 50) == 0)
+        {
+            lambda_min = vec_prod(x, Ax, n);
+        }
+        #endif
+
+        // mexPrintf("Iter: %d, Lam = %e, y = [%e, %e, %e]\n", i+1, lambda_min, y[0], y[1], y[2]);
+
+
     }
 
     *lambda_min_result = lambda_min;

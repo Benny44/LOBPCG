@@ -13,10 +13,11 @@ fprintf('Compiling LOBPCG\n');
 error_msg = 'The C compiler could not succesfully compile ';
 
 flags = '-largeArrayDims';
-cflags = 'CFLAGS="\$CFLAGS -std=c99 -O3 -DLAPACK"';
+cflags = 'CFLAGS="\$CFLAGS -std=c99 -O3"';
 flags = [cflags ' ' flags];
 
-s = sprintf ('mex %s -O -lm -lmwlapack %s.c', flags, 'lobpcg_mex') ;
+% s = sprintf ('mex %s -O -lm -lmwlapack -DDLAPACK %s.c', flags, 'lobpcg_mex') ;
+s = sprintf ('mex %s -O -lm %s.c', flags, 'lobpcg_mex') ;
 eval (s);
 % if mex('-outdir', current_path, fullfile(current_path,'lobpcg_mex.c'),...
 %          '-lm', '-lmwlapack' , '-largeArrayDims',...
